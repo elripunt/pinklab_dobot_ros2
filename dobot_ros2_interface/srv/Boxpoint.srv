@@ -1,0 +1,6 @@
+string req_str
+---
+float32 x
+float32 y
+float32 z
+string res_str

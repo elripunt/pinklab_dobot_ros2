@@ -8,6 +8,8 @@ from rclpy.action import ActionServer
 from dobot_ros2_interface.srv import Dashboard
 from dobot_ros2_interface.action import Move
 
+from rcl_interfaces.msg import SetParametersResult
+
 class DashboardServer(Node):
     def __init__(self):
         super().__init__('dashboard')
@@ -24,13 +26,16 @@ class DashboardServer(Node):
         self.gripper_p = 1  
         self.dashboard_p = 29999
         self.move_p = 30003
-        self.feed_p = 30004
-        self.speed_value = 10                # 로봇 속도 (1~100 사이의 값 입력)
-        self.get_logger().info("연결 설정 중...")
+        self.feed_p = 30004         
 
-        self.connect_robot() # 로봇 연결
-        
+        self.declare_parameter('speed_value', 10)  # 로봇 속도 (1~100 사이의 값 입력)
+        self.speed_value = self.get_parameter('speed_value').value
+
+        self.connect_robot() # 로봇 연결    
+    
         self.current_actual = None
+
+        self.add_on_set_parameters_callback(self.parameters_callbacks)
 
     def get_feed(self, feed: DobotApi):
         hasRead = 0
@@ -50,15 +55,12 @@ class DashboardServer(Node):
             time.sleep(0.001)
     
     def connect_robot(self):
+        self.get_logger().info("연결 설정 중...")
         try:
-            self.get_logger().info("연결 설정 중...")
-
             self.dashboard = DobotApiDashboard(self.ip, self.dashboard_p)
             self.move = DobotApiMove(self.ip, self.move_p)
             self.feed = DobotApi(self.ip, self.feed_p)
             self.get_logger().info("연결 성공!!")
-            
-            self.robot_speed(self.dashboard, 10)
         
             feed_thread = threading.Thread(target=self.get_feed, args=(self.feed,))
             feed_thread.setDaemon(True)
@@ -82,10 +84,11 @@ class DashboardServer(Node):
 
     def robot_speed(self, dashboard : DobotApiDashboard, speed_value):
         dashboard.SpeedFactor(speed_value)
-        
+
     def callback_service(self, request, response):
         if request.req_str == 'power on':
             self.dashboard.EnableRobot()
+            self.robot_speed(self.dashboard, self.speed_value)
             time.sleep(0.1)
             response.res_str = 'power on'
             
@@ -100,10 +103,12 @@ class DashboardServer(Node):
             self.robot_clear(self.dashboard)
             time.sleep(0.3)
             self.dashboard.EnableRobot()
+            self.robot_speed(self.dashboard, self.speed_value)
             time.sleep(0.3)
             response.res_str = 'clear error'
         
         #gripper
+        
         elif request.req_str == 'gripper on':
             self.gripper_DO(self.dashboard, self.gripper_p, 1)
             time.sleep(0.1)
@@ -116,9 +121,11 @@ class DashboardServer(Node):
 
         else:
             self.get_logger().info('Wrong Command!')
+            response.res_str = "Wrong Command!"
         
         self.get_logger().info(response.res_str)
         return response
+        
 
     def execute_callback(self, goal_handle):
         goal_x = goal_handle.request.goal_pose.position.x
@@ -149,14 +156,27 @@ class DashboardServer(Node):
             if all(abs(diff) <= 0.1 for diff in result): # 골 좌표와 현재 좌표 차이가 0.1이하 일때
                 break
             time.sleep(1)
-        
-
+            
+            
         goal_handle.succeed()
         self.get_logger().info(f"goal succeed")
         
         result = Move.Result()
         result.result_str = "succeed"
         return result
+    
+    def parameters_callbacks(self, params):
+        for param in params: 
+            if param.name == 'speed_value':
+                if param.value <= 100 and param.value >= 0:
+                    self.speed_value = param.value
+                    self.robot_speed(self.dashboard, self.speed_value)
+                    self.get_logger().info(f"set robot speed {self.speed_value}")
+                else:
+                    self.get_logger().info("speed value is 0 ~ 100")
+            
+        return SetParametersResult(successful=True)
+
     
 def main(args=None):
     rp.init(args=args)
