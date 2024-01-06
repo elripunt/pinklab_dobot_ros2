@@ -12,6 +12,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob.glob(os.path.join('launch', '*.py'))),
+        ('share/' + package_name + '/param', glob.glob(os.path.join('param', '*.yaml'))),
         ('lib/' + package_name + '/api', glob.glob(os.path.join('api', '*.py')))
     ],
     install_requires=['setuptools'],
@@ -24,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             "dashboard_server=dobot_ros2.dashboard_server:main",
-            "move_server=dobot_ros2.move_server:main"
+            "dashboard_client=dobot_ros2.dashboard_client:main",
+            "move_goal_client=dobot_ros2.move_goal_client:main",
         ],
     },
 )
